@@ -1,14 +1,11 @@
 language: go
-
+env: "GO111MODULE=on"
 os:
   - linux
   - osx
-
 sudo: false
-
+services: "redis-server"
 go:
-  - 1.9
-  - tip
-
-install:
-  - make install
+  - "1.11beta2"
+  - "1.11beta3"
+install: true
