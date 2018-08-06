@@ -1,31 +1,30 @@
 package internal
 
-import "net"
+import (
+	"net"
+	"sync"
+)
+
+const defaultMaxIdleConns = 2
 
 // Pool is a connection pool to communicate with a Redis database.
 type Pool struct {
-	c       chan net.Conn
-	tcpAddr *net.TCPAddr
+	c            chan net.Conn
+	addr         *net.TCPAddr
+	maxOpenConns int
+	maxIdleConns int
+	openConns    int
+	mu           *sync.RWMutex
 }
 
-// NewPool creates a new connection pool if "maxConns" is greater than 0.
-// Otherwise, it will spawn a new connection everytime a client tries to
-// retrieve a connection.
-func NewPool(address string, maxConns int) (*Pool, error) {
-	tcpAddr, err := net.ResolveTCPAddr("tcp", address)
-
+// NewPool creates a new connection pool.
+func NewPool(address string) (*Pool, error) {
+	addr, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {
 		return nil, err
 	}
-
-	p := &Pool{tcpAddr: tcpAddr}
-
-	p.SetMaxIdleConns(maxConns)
-
-	if err = p.Start(); err != nil {
-		return nil, err
-	}
-
+	p := &Pool{addr: addr, mu: &sync.RWMutex{}}
+	p.SetMaxIdleConns(defaultMaxIdleConns)
 	return p, nil
 }
 
@@ -35,47 +34,37 @@ func (p *Pool) Get() (net.Conn, error) {
 	select {
 	case conn := <-p.c:
 		return conn, nil
-
 	default:
-		return p.newPoolConn()
+		return newConn(p)
 	}
 }
 
-// SetMaxIdleConns limits the amount of available connections.
+// SetMaxIdleConns limits the amount of idle connections in the pool.
 func (p *Pool) SetMaxIdleConns(maxConns int) {
-	if maxConns > 0 {
-		p.c = make(chan net.Conn, maxConns)
+	p.maxIdleConns = p.resolveConns(maxConns)
+	p.resetChan()
+}
+
+// SetMaxOpenConns limits the amount of openConns connections.
+func (p *Pool) SetMaxOpenConns(maxConns int) {
+	p.maxOpenConns = maxConns
+	p.maxIdleConns = p.resolveConns(p.maxIdleConns)
+	p.resetChan()
+}
+
+func (p *Pool) resetChan() {
+	if p.maxIdleConns <= 0 {
+		p.c = nil
+		return
+	}
+	if p.maxIdleConns != cap(p.c) {
+		p.c = make(chan net.Conn, p.maxIdleConns)
 	}
 }
 
-// Start fills the pool connection.
-func (p *Pool) Start() error {
-	for i := 0; i < cap(p.c); i++ {
-		conn, err := p.newPoolConn()
-
-		if err != nil {
-			close(p.c)
-
-			return err
-		}
-
-		select {
-		case p.c <- conn:
-
-		default:
-			return conn.Close()
-		}
+func (p *Pool) resolveConns(maxConns int) int {
+	if p.maxOpenConns > 0 && maxConns > p.maxOpenConns {
+		return p.maxOpenConns
 	}
-
-	return nil
-}
-
-func (p *Pool) newPoolConn() (net.Conn, error) {
-	conn, err := net.DialTCP("tcp", nil, p.tcpAddr)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return &poolConn{Conn: conn, poolC: p.c}, nil
+	return maxConns
 }
