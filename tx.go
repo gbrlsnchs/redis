@@ -2,7 +2,6 @@ package redis
 
 import (
 	"net"
-	"sync"
 
 	"github.com/gbrlsnchs/redis/internal"
 )
@@ -37,7 +36,7 @@ func (tx *Tx) Query(cmd string, args ...interface{}) (*Rows, error) {
 	if err := tx.do([]byte(cmd), args...); err != nil {
 		return nil, err
 	}
-	return &Rows{conn: tx.conn, mu: &sync.RWMutex{}, isMulti: true}, nil
+	return newRows(tx.conn, true), nil
 }
 
 func (tx *Tx) QueryRow(cmd string, args ...interface{}) *Row {

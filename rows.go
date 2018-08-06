@@ -13,19 +13,31 @@ import (
 )
 
 var (
-	ErrNoResult  = errors.New("redis: no result")
-	ErrNullArray = errors.New("redis: array is null")
+	ErrNoResult   = errors.New("redis: no result")
+	ErrNullArray  = errors.New("redis: array is null")
+	ErrRowsClosed = errors.New("redis: rows are closed")
 )
 
 type Rows struct {
-	conn    net.Conn
-	buf     *bufio.Reader
-	err     error
-	value   []byte
-	null    bool
-	isMulti bool
-	closed  bool
-	mu      *sync.RWMutex
+	conn     net.Conn
+	rd       *bufio.Reader
+	err      error
+	value    []byte
+	null     bool
+	isMulti  bool
+	closed   bool
+	errMu    *sync.RWMutex
+	closedMu *sync.RWMutex
+}
+
+func newRows(conn net.Conn, isMulti bool) *Rows {
+	return &Rows{
+		conn:     conn,
+		rd:       bufio.NewReader(conn),
+		isMulti:  isMulti,
+		errMu:    &sync.RWMutex{},
+		closedMu: &sync.RWMutex{},
+	}
 }
 
 func (rs *Rows) Close() error {
@@ -35,32 +47,27 @@ func (rs *Rows) Close() error {
 	if err := rs.conn.Close(); err != nil {
 		return err
 	}
-	rs.mu.Lock()
+	rs.closedMu.Lock()
 	rs.closed = true
-	rs.mu.Unlock()
+	rs.closedMu.Unlock()
 	return nil
 }
 
 func (rs *Rows) Err() error {
-	rs.mu.RLock()
-	defer rs.mu.RUnlock()
+	rs.errMu.RLock()
+	defer rs.errMu.RUnlock()
 	return rs.err
 }
 
 func (rs *Rows) Next() bool {
 	rs.null = false
-	// Read response and store its buffer.
-	if rs.buf == nil {
-		rs.buf = bufio.NewReader(rs.conn)
-	}
-	var b byte
-	b, err := rs.buf.ReadByte()
+	b, err := rs.rd.ReadByte()
 	// EOF.
 	if err != nil {
 		return false
 	}
-	t := Type(b)                   // first byte dictates the response type
-	s, _ := rs.buf.ReadBytes('\n') // trust Redis has properly set CRLF
+	t := Type(b)                  // first byte dictates the response type
+	s, _ := rs.rd.ReadBytes('\n') // trust Redis has properly set CRLF
 	s = s[:len(s)-2]
 
 	if t == ArrayType {
@@ -69,7 +76,7 @@ func (rs *Rows) Next() bool {
 			rs.err = ErrNullArray
 			return false
 		}
-		b, _ = rs.buf.ReadByte()
+		b, _ = rs.rd.ReadByte()
 		t = Type(b)
 	}
 	if t == ErrorType {
@@ -80,7 +87,7 @@ func (rs *Rows) Next() bool {
 		size, _ := strconv.Atoi(string(s))
 		if rs.null = size == -1; !rs.null {
 			str := make([]byte, size+2) // read including CRLF
-			rs.buf.Read(str)
+			rs.rd.Read(str)
 			s = str[:len(str)-2] // remove CRLF
 		} else {
 			rs.err = ErrNoResult
@@ -95,47 +102,91 @@ func (rs *Rows) Next() bool {
 
 func (rs *Rows) Scan(value interface{}) error {
 	if rs.isClosed() {
-		return errors.New("redis: rows are closed")
+		return ErrRowsClosed
 	}
 	var err error
-	switch p := value.(type) {
+	switch v := value.(type) {
+	case *[]byte:
+		*v = rs.value
 	case *string:
 		if rs.null {
 			err = errors.New("RESP response is a null value, not string")
 			break
 		}
-		*p = string(rs.value)
+		*v = string(rs.value)
 	case *NullString:
-		*p = NullString{Valid: !rs.null}
-		if p.Valid {
-			p.String = string(rs.value)
+		*v = NullString{Valid: !rs.null}
+		if v.Valid {
+			v.String = string(rs.value)
 		}
 	case *NullInt64:
-		*p = NullInt64{Valid: !rs.null}
-		if p.Valid {
-			p.Int64, err = strconv.ParseInt(string(rs.value), 10, 64)
+		*v = NullInt64{Valid: !rs.null}
+		if v.Valid {
+			v.Int64, err = strconv.ParseInt(string(rs.value), 10, 64)
 		}
+	case *bool:
+		*v, err = strconv.ParseBool(string(rs.value))
 	case *int:
-		*p, err = strconv.Atoi(string(rs.value))
+		*v, err = strconv.Atoi(string(rs.value))
+	case *int8:
+		var n int64
+		n, err = strconv.ParseInt(string(rs.value), 10, 8)
+		*v = int8(n)
+	case *int16:
+		var n int64
+		n, err = strconv.ParseInt(string(rs.value), 10, 16)
+		*v = int16(n)
+	case *int32:
+		var n int64
+		n, err = strconv.ParseInt(string(rs.value), 10, 32)
+		*v = int32(n)
+	case *int64:
+		*v, err = strconv.ParseInt(string(rs.value), 10, 64)
+	case *uint:
+		var n uint64
+		n, err = strconv.ParseUint(string(rs.value), 10, 0)
+		*v = uint(n)
+	case *uint8:
+		var n uint64
+		n, err = strconv.ParseUint(string(rs.value), 10, 8)
+		*v = uint8(n)
+	case *uint16:
+		var n uint64
+		n, err = strconv.ParseUint(string(rs.value), 10, 16)
+		*v = uint16(n)
+	case *uint32:
+		var n uint64
+		n, err = strconv.ParseUint(string(rs.value), 10, 32)
+		*v = uint32(n)
+	case *uint64:
+		*v, err = strconv.ParseUint(string(rs.value), 10, 64)
+	case *float32:
+		var n float64
+		n, err = strconv.ParseFloat(string(rs.value), 32)
+		*v = float32(n)
+	case *float64:
+		*v, err = strconv.ParseFloat(string(rs.value), 64)
 	case *time.Time:
 		var unix int64
 		if unix, err = strconv.ParseInt(string(rs.value), 10, 64); err != nil {
 			break
 		}
-		*p = time.Unix(unix, 0)
+		*v = time.Unix(unix, 0)
 	case *internal.Dump:
 		return nil
 	default:
 		err = errors.New("redis: type is not scannable")
 	}
 	if err != nil {
+		rs.errMu.Lock()
 		rs.err = err
+		rs.errMu.Unlock()
 	}
 	return nil
 }
 
 func (rs *Rows) isClosed() bool {
-	rs.mu.RLock()
-	defer rs.mu.RUnlock()
+	rs.closedMu.RLock()
+	defer rs.closedMu.RUnlock()
 	return rs.closed
 }
