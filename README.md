@@ -1,5 +1,6 @@
 # redis (Go Redis client)
 [![Build Status](https://travis-ci.org/gbrlsnchs/redis.svg?branch=master)](https://travis-ci.org/gbrlsnchs/redis)
+[![GoDoc](https://godoc.org/github.com/gbrlsnchs/redis?status.svg)](https://godoc.org/github.com/gbrlsnchs/redis)
 
 ## About
 This package is a [Redis] client for [Go]. It tries to work similar to the `database/sql` package.
