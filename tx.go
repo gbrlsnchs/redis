@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"context"
 	"net"
 
 	"github.com/gbrlsnchs/redis/internal"
@@ -8,55 +9,62 @@ import (
 
 type Tx struct {
 	conn net.Conn
+	ctx  context.Context
+	w    *internal.Writer
 }
 
-func newTx(row *Row) (*Tx, error) {
-	row.rows.isMulti = true
-	// Dump "MULTI" command response.
-	var dump internal.Dump
-	if err := row.Scan(&dump); err != nil {
+func multi(ctx context.Context, conn net.Conn) (*Tx, error) {
+	var err error
+	w := internal.NewWriter(conn)
+	if _, err = w.WriteCmd("MULTI"); err != nil {
+		conn.Close()
 		return nil, err
 	}
-	return &Tx{conn: row.rows.conn}, nil
-}
-
-func (tx *Tx) Commit() error {
-	if err := tx.Exec("EXEC"); err != nil {
-		return tx.Rollback()
-	}
-	return tx.conn.Close()
-}
-
-func (tx *Tx) Exec(cmd string, args ...interface{}) error {
-	var dump internal.Dump
-	return tx.QueryRow(cmd, args...).Scan(&dump)
-}
-
-func (tx *Tx) Query(cmd string, args ...interface{}) (*Rows, error) {
-	if err := tx.do([]byte(cmd), args...); err != nil {
+	if _, err = read(conn); err != nil {
 		return nil, err
 	}
-	return newRows(tx.conn, true), nil
+	return &Tx{conn, ctx, w}, nil
 }
 
-func (tx *Tx) QueryRow(cmd string, args ...interface{}) *Row {
-	rows, err := tx.Query(cmd, args...)
-	return &Row{
-		err:  err,
-		rows: rows,
-	}
+func (tx *Tx) Discard() (*Result, error) {
+	defer tx.conn.Close()
+	return tx.send(tx.ctx, "DISCARD")
 }
 
-func (tx *Tx) Rollback() error {
-	if err := tx.Exec("DISCARD"); err != nil {
-		return err
-	}
-	return tx.conn.Close()
+func (tx *Tx) Exec() (*Result, error) {
+	defer tx.conn.Close()
+	return tx.send(tx.ctx, "EXEC")
 }
 
-func (tx *Tx) do(cmd []byte, args ...interface{}) error {
-	if _, err := tx.conn.Write(internal.Parse(cmd, args...)); err != nil {
-		return err
+func (tx *Tx) Queue(cmd string, args ...interface{}) (*Result, error) {
+	return tx.QueueContext(tx.ctx, cmd, args...)
+}
+
+func (tx *Tx) QueueContext(ctx context.Context, cmd string, args ...interface{}) (*Result, error) {
+	return tx.send(ctx, cmd, args...)
+}
+
+func (tx *Tx) send(ctx context.Context, cmd string, args ...interface{}) (*Result, error) {
+	var err error
+	rc := make(chan *Result, 1)
+	ec := make(chan error, 1)
+	go func() {
+		if _, err = tx.w.WriteCmd(cmd, args...); err != nil {
+			ec <- err
+			return
+		}
+		var r *Result
+		if r, err = read(tx.conn); err != nil {
+			ec <- err
+		}
+		rc <- r
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err = <-ec:
+		return nil, err
+	case r := <-rc:
+		return r, nil
 	}
-	return nil
 }

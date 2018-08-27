@@ -1,7 +1,7 @@
 package redis
 
 import (
-	"net"
+	"context"
 
 	"github.com/gbrlsnchs/redis/internal"
 )
@@ -18,38 +18,58 @@ func Open(addr string) (*DB, error) {
 	return &DB{pool: p}, nil
 }
 
-func (db *DB) Begin() (*Tx, error) {
-	row := db.QueryRow("MULTI")
-	return newTx(row)
+func (db *DB) Multi() (*Tx, error) {
+	return db.MultiTx(context.Background())
 }
 
-func (db *DB) Exec(cmd string, args ...interface{}) error {
-	var dump internal.Dump
-	return db.QueryRow(cmd, args...).Scan(&dump)
-}
-
-func (db *DB) Ping(args ...interface{}) (string, error) {
-	row := db.QueryRow("PING", args...)
-	var pong string
-	if err := row.Scan(&pong); err != nil {
-		return "", err
-	}
-	return pong, nil
-}
-
-func (db *DB) Query(cmd string, args ...interface{}) (*Rows, error) {
-	conn, err := db.do([]byte(cmd), args...)
+func (db *DB) MultiTx(ctx context.Context) (*Tx, error) {
+	conn, err := db.pool.Get(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return newRows(conn, false), nil
+	return multi(ctx, conn)
 }
 
-func (db *DB) QueryRow(cmd string, args ...interface{}) *Row {
-	rows, err := db.Query(cmd, args...)
-	return &Row{
-		err:  err,
-		rows: rows,
+func (db *DB) Ping(args ...interface{}) (string, error) {
+	r, err := db.Send("PING", args...)
+	if err != nil {
+		return "", err
+	}
+	return r.String(), nil
+}
+
+func (db *DB) Send(cmd string, args ...interface{}) (*Result, error) {
+	return db.SendContext(context.Background(), cmd, args...)
+}
+
+func (db *DB) SendContext(ctx context.Context, cmd string, args ...interface{}) (*Result, error) {
+	conn, err := db.pool.Get(ctx)
+	defer conn.Close()
+	if err != nil {
+		return nil, err
+	}
+	w := internal.NewWriter(conn)
+	rc := make(chan *Result, 1)
+	ec := make(chan error, 1)
+	go func() {
+		if _, err = w.WriteCmd(cmd, args...); err != nil {
+			ec <- err
+			return
+		}
+		var r *Result
+		if r, err = read(conn); err != nil {
+			ec <- err
+			return
+		}
+		rc <- r
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err = <-ec:
+		return nil, err
+	case r := <-rc:
+		return r, nil
 	}
 }
 
@@ -59,15 +79,4 @@ func (db *DB) SetMaxIdleConns(maxConns int) {
 
 func (db *DB) SetMaxOpenConns(maxConns int) {
 	db.pool.SetMaxOpenConns(maxConns)
-}
-
-func (db *DB) do(cmd []byte, args ...interface{}) (net.Conn, error) {
-	conn, err := db.pool.Get()
-	if err != nil {
-		return nil, err
-	}
-	if _, err = conn.Write(internal.Parse(cmd, args...)); err != nil {
-		return nil, err
-	}
-	return conn, nil
 }
