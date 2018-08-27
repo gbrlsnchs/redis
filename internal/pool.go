@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"net"
 	"sync"
 )
@@ -13,7 +14,7 @@ type Pool struct {
 	addr         *net.TCPAddr
 	maxOpenConns int
 	maxIdleConns int
-	openConns    int
+	queue        chan struct{}
 	mu           *sync.RWMutex
 }
 
@@ -28,14 +29,28 @@ func NewPool(address string) (*Pool, error) {
 	return p, nil
 }
 
+// DialContext tries to stablish a connection before a context is canceled.
+func (p *Pool) DialContext(ctx context.Context) (net.Conn, error) {
+	var err error
+	if err = p.wait(ctx); err != nil {
+		return nil, err
+	}
+	var d net.Dialer
+	c, err := d.DialContext(ctx, "tcp", p.addr.String())
+	if err != nil {
+		return nil, err
+	}
+	return &conn{Conn: c, pool: p.c, queue: p.queue}, nil
+}
+
 // Get retrieves a new connection if any is available,
 // otherwise it spawns a new connection.
-func (p *Pool) Get() (net.Conn, error) {
+func (p *Pool) Get(ctx context.Context) (net.Conn, error) {
 	select {
 	case conn := <-p.c:
 		return conn, nil
 	default:
-		return newConn(p)
+		return p.DialContext(ctx)
 	}
 }
 
@@ -45,19 +60,29 @@ func (p *Pool) SetMaxIdleConns(maxConns int) {
 	p.resetChan()
 }
 
-// SetMaxOpenConns limits the amount of openConns connections.
+// SetMaxOpenConns limits the amount of open connections.
 func (p *Pool) SetMaxOpenConns(maxConns int) {
 	p.maxOpenConns = maxConns
 	p.maxIdleConns = p.resolveConns(p.maxIdleConns)
 	p.resetChan()
+	if p.maxOpenConns > 0 {
+		p.queue = make(chan struct{}, p.maxOpenConns)
+		return
+	}
+	p.queue = nil
 }
 
 func (p *Pool) resetChan() {
+	// Don't reuse any connections.
 	if p.maxIdleConns <= 0 {
 		p.c = nil
 		return
 	}
+	// Reset channel only if size has changed.
 	if p.maxIdleConns != cap(p.c) {
+		if p.c != nil {
+			close(p.c)
+		}
 		p.c = make(chan net.Conn, p.maxIdleConns)
 	}
 }
@@ -67,4 +92,16 @@ func (p *Pool) resolveConns(maxConns int) int {
 		return p.maxOpenConns
 	}
 	return maxConns
+}
+
+func (p *Pool) wait(ctx context.Context) error {
+	if p.maxOpenConns > 0 {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case p.queue <- struct{}{}:
+			return nil
+		}
+	}
+	return nil
 }
