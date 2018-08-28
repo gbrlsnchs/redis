@@ -3,12 +3,7 @@
 [![GoDoc](https://godoc.org/github.com/gbrlsnchs/redis?status.svg)](https://godoc.org/github.com/gbrlsnchs/redis)
 
 ## About
-This package is a [Redis] client for [Go]. It tries to work similar to the `database/sql` package.
-It is so simple that it can be run without any additional setup.
-
-Out of the box, it uses an internal connection pool for reusing connections, if desired.  
-If there are available connections in the pool, it simply reuses an open connection,
-otherwise it spawns a new connection and, if it can't store it in the pool, closes it.
+This package is a simple [Redis] client. It is context-aware and uses a total customizable internal connection pool.
 
 ## Usage
 Full documentation [here] (work in progress).
@@ -16,19 +11,23 @@ Full documentation [here] (work in progress).
 ## Example
 ```go
 db, err := redis.Open("localhost:6379")
+db.SetMaxIdleConns(20)  // reuses up to 20 connections without closing them
+db.SetMaxOpensConns(45) // opens up to 45 connections (20 remain open), otherwise waits
 if err != nil {
 	return err
 }
 
-if err = db.Exec("SET", "foo", 1); err != nil {
-	return err
+r, err := db.Send("SET", "foo", 1)
+if err != nil {
+	// handle error
 }
+log.Print(r.String()) // prints "OK"
+log.Print(r.IsOK())   // prints "true"
 
-var foo int8
-if err = db.QueryRow("GET", "foo").Scan(&foo); err != nil {
-	return err
+if r, err = db.Send("GET", "foo"); err != nil {
+	// handle error
 }
-log.Println(foo) // prints 1
+log.Print(r.Int64()) // prints "1"
 ```
 
 ## Contribution
