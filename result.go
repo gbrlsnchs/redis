@@ -15,9 +15,9 @@ type Result struct {
 	values [][]byte
 }
 
-func read(conn net.Conn) (*Result, error) {
+func read(conn net.Conn, times int) (*Result, error) {
 	rr := internal.NewReader(conn)
-	values, err := rr.ReadFull()
+	values, err := rr.ReadN(times)
 	if err != nil {
 		return nil, err
 	}

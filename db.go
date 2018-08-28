@@ -27,7 +27,12 @@ func (db *DB) MultiTx(ctx context.Context) (*Tx, error) {
 	if err != nil {
 		return nil, err
 	}
-	return multi(ctx, conn)
+	tx, err := multi(ctx, conn)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return tx, nil
 }
 
 func (db *DB) Ping(args ...interface{}) (string, error) {
@@ -49,28 +54,7 @@ func (db *DB) SendContext(ctx context.Context, cmd string, args ...interface{}) 
 		return nil, err
 	}
 	w := internal.NewWriter(conn)
-	rc := make(chan *Result, 1)
-	ec := make(chan error, 1)
-	go func() {
-		if _, err = w.WriteCmd(cmd, args...); err != nil {
-			ec <- err
-			return
-		}
-		var r *Result
-		if r, err = read(conn); err != nil {
-			ec <- err
-			return
-		}
-		rc <- r
-	}()
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err = <-ec:
-		return nil, err
-	case r := <-rc:
-		return r, nil
-	}
+	return send(ctx, w, conn, 1, cmd, args...)
 }
 
 func (db *DB) SetMaxIdleConns(maxConns int) {

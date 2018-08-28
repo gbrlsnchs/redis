@@ -14,13 +14,8 @@ type Tx struct {
 }
 
 func multi(ctx context.Context, conn net.Conn) (*Tx, error) {
-	var err error
 	w := internal.NewWriter(conn)
-	if _, err = w.WriteCmd("MULTI"); err != nil {
-		conn.Close()
-		return nil, err
-	}
-	if _, err = read(conn); err != nil {
+	if _, err := send(ctx, w, conn, 1, "MULTI"); err != nil {
 		return nil, err
 	}
 	return &Tx{conn, ctx, w}, nil
@@ -28,12 +23,12 @@ func multi(ctx context.Context, conn net.Conn) (*Tx, error) {
 
 func (tx *Tx) Discard() (*Result, error) {
 	defer tx.conn.Close()
-	return tx.send(tx.ctx, "DISCARD")
+	return send(tx.ctx, tx.w, tx.conn, 1, "DISCARD")
 }
 
 func (tx *Tx) Exec() (*Result, error) {
 	defer tx.conn.Close()
-	return tx.send(tx.ctx, "EXEC")
+	return send(tx.ctx, tx.w, tx.conn, 1, "EXEC")
 }
 
 func (tx *Tx) Queue(cmd string, args ...interface{}) (*Result, error) {
@@ -41,30 +36,5 @@ func (tx *Tx) Queue(cmd string, args ...interface{}) (*Result, error) {
 }
 
 func (tx *Tx) QueueContext(ctx context.Context, cmd string, args ...interface{}) (*Result, error) {
-	return tx.send(ctx, cmd, args...)
-}
-
-func (tx *Tx) send(ctx context.Context, cmd string, args ...interface{}) (*Result, error) {
-	var err error
-	rc := make(chan *Result, 1)
-	ec := make(chan error, 1)
-	go func() {
-		if _, err = tx.w.WriteCmd(cmd, args...); err != nil {
-			ec <- err
-			return
-		}
-		var r *Result
-		if r, err = read(tx.conn); err != nil {
-			ec <- err
-		}
-		rc <- r
-	}()
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	case err = <-ec:
-		return nil, err
-	case r := <-rc:
-		return r, nil
-	}
+	return send(ctx, tx.w, tx.conn, 1, cmd, args...)
 }
