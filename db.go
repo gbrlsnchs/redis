@@ -49,10 +49,10 @@ func (db *DB) Send(cmd string, args ...interface{}) (*Result, error) {
 
 func (db *DB) SendContext(ctx context.Context, cmd string, args ...interface{}) (*Result, error) {
 	conn, err := db.pool.Get(ctx)
-	defer conn.Close()
 	if err != nil {
 		return nil, err
 	}
+	defer conn.Close()
 	w := internal.NewWriter(conn)
 	return send(ctx, w, conn, 1, cmd, args...)
 }

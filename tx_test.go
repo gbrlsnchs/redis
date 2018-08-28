@@ -8,6 +8,7 @@ import (
 )
 
 func TestTxExec(t *testing.T) {
+	_, _ = db.Send("FLUSHDB")
 	testCases := []struct {
 		cmd  string
 		args []interface{}
@@ -67,6 +68,7 @@ func TestTxExec(t *testing.T) {
 }
 
 func TestTxDiscard(t *testing.T) {
+	_, _ = db.Send("FLUSHDB")
 	testCases := []struct {
 		cmd  string
 		args []interface{}

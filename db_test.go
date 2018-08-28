@@ -1,6 +1,7 @@
 package redis_test
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -15,14 +16,15 @@ var db *DB
 func TestMain(m *testing.M) {
 	var err error
 	db, err = Open("localhost:6379")
+	db.SetMaxOpenConns(1)
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, _ = db.Send("FLUSHDB")
 	os.Exit(m.Run())
 }
 
 func TestPing(t *testing.T) {
+	_, _ = db.Send("FLUSHDB")
 	testCases := []struct {
 		args     []interface{}
 		expected string
@@ -45,28 +47,36 @@ func TestPing(t *testing.T) {
 }
 
 func TestSend(t *testing.T) {
+	_, _ = db.Send("FLUSHDB")
 	now := time.Now()
 	testCases := []struct {
-		cmd  string
-		args []interface{}
-		resp interface{}
-		err  error
+		cmd    string
+		args   []interface{}
+		resp   interface{}
+		err    error
+		cancel bool
 	}{
-		{"GET", []interface{}{"TestSend"}, nil, ErrNoResult},
-		{"SET", []interface{}{"TestSend", "foobar"}, "OK", nil},
-		{"GET", []interface{}{"TestSend"}, "foobar", nil},
-		{"DEL", []interface{}{"TestSend"}, 1, nil},
-		{"GET", []interface{}{"TestSend"}, nil, ErrNoResult},
-		{"INCR", []interface{}{"TestSend"}, 1, nil},
-		{"INCR", []interface{}{"TestSend"}, 2, nil},
-		{"DECR", []interface{}{"TestSend"}, 1, nil},
-		{"ECHO", []interface{}{"TestSend"}, "TestSend", nil},
-		{"TIME", nil, now, nil},
+		{"GET", []interface{}{"TestSend"}, nil, ErrNoResult, false},
+		{"SET", []interface{}{"TestSend", "foobar"}, "OK", nil, false},
+		{"GET", []interface{}{"TestSend"}, "foobar", nil, false},
+		{"GET", []interface{}{"TestSend"}, "foobar", context.Canceled, true},
+		{"DEL", []interface{}{"TestSend"}, 1, nil, false},
+		{"GET", []interface{}{"TestSend"}, nil, ErrNoResult, false},
+		{"INCR", []interface{}{"TestSend"}, 1, nil, false},
+		{"INCR", []interface{}{"TestSend"}, 2, nil, false},
+		{"DECR", []interface{}{"TestSend"}, 1, nil, false},
+		{"ECHO", []interface{}{"TestSend"}, "TestSend", nil, false},
+		{"TIME", nil, now, nil, false},
 	}
 	for _, tc := range testCases {
 		args := fmt.Sprintf("%v", tc.args)
 		t.Run(fmt.Sprintf("%s %s", tc.cmd, args), func(t *testing.T) {
-			r, err := db.Send(tc.cmd, tc.args...)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			if tc.cancel {
+				cancel()
+			}
+			r, err := db.SendContext(ctx, tc.cmd, tc.args...)
 			if want, got := tc.err, err; want != got {
 				t.Errorf("want %v, got %v", want, got)
 			}

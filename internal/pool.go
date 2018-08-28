@@ -40,12 +40,17 @@ func (p *Pool) DialContext(ctx context.Context) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &conn{Conn: c, pool: p.c, queue: p.queue}, nil
+	return &Conn{Conn: c, pool: p.c, queue: p.queue, done: make(chan struct{}, 1)}, nil
 }
 
 // Get retrieves a new connection if any is available,
 // otherwise it spawns a new connection.
 func (p *Pool) Get(ctx context.Context) (net.Conn, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
 	select {
 	case conn := <-p.c:
 		return conn, nil

@@ -12,6 +12,8 @@ func send(ctx context.Context, w *internal.Writer, conn net.Conn, times int, cmd
 	rc := make(chan *Result, 1)
 	ec := make(chan error, 1)
 	go func() {
+		conn := conn.(*internal.Conn)
+		defer conn.Unlock()
 		if _, err = w.WriteCmd(cmd, args...); err != nil {
 			ec <- err
 			return
@@ -21,6 +23,7 @@ func send(ctx context.Context, w *internal.Writer, conn net.Conn, times int, cmd
 			ec <- err
 			return
 		}
+
 		rc <- r
 	}()
 	select {
