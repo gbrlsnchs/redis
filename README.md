@@ -11,11 +11,11 @@ Full documentation [here] (work in progress).
 ## Example
 ```go
 db, err := redis.Open("localhost:6379")
-db.SetMaxIdleConns(20)  // reuses up to 20 connections without closing them
-db.SetMaxOpensConns(45) // opens up to 45 connections (20 remain open), otherwise waits
 if err != nil {
 	return err
 }
+db.SetMaxIdleConns(20)  // reuses up to 20 connections without closing them
+db.SetMaxOpensConns(45) // opens up to 45 connections (20 remain open), otherwise waits
 
 r, err := db.Send("SET", "foo", 1)
 if err != nil {
