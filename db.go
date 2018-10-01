@@ -2,7 +2,6 @@ package redis
 
 import (
 	"context"
-	"log"
 	"net"
 
 	"github.com/gbrlsnchs/cpool"
