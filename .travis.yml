@@ -1,9 +1,18 @@
-language: go
-env: "GO111MODULE=on"
-os:
-  - linux
 sudo: false
-services: "redis-server"
+os:
+  - 'linux'
+services: 'redis-server'
+language: 'go'
 go:
-  - "1.11beta2"
-install: true
+  - '1.10'
+  - '1.11'
+  - 'tip'
+install:
+  - 'cd ${TRAVIS_HOME}/gopath'
+  - 'export GOVERSION=$(go version | awk ''{print $3}'')'
+  - 'echo $GOVERSION'
+  - 'if [ "$GOVERSION" == "go1.10" ]; then go get -u golang.org/x/vgo; fi'
+  - 'mkdir $HOME/test'
+  - 'rsync -az ${TRAVIS_BUILD_DIR}/ $HOME/test/'
+  - 'cd $HOME/test'
+script: 'if [ "$GOVERSION" == "go1.10" ]; then vgo test -v -race -count=10; else go test -v -race -count=10; fi'
