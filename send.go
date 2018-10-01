@@ -8,9 +8,7 @@ import (
 )
 
 func send(ctx context.Context, w *internal.Writer, conn net.Conn, times int, cmd string, args ...interface{}) (*Result, error) {
-	var err error
-	rc := make(chan *Result)
-	ec := make(chan error)
+	ch := make(chan interface{})
 
 	// Check if context is done, otherwise wait for the whole connection to be read.
 	select {
@@ -18,23 +16,24 @@ func send(ctx context.Context, w *internal.Writer, conn net.Conn, times int, cmd
 		return nil, ctx.Err()
 	default:
 		go func() {
-			if _, err = w.WriteCmd(cmd, args...); err != nil {
-				ec <- err
+			if _, err := w.WriteCmd(cmd, args...); err != nil {
+				ch <- err
 				return
 			}
-			var r *Result
-			if r, err = read(conn, times); err != nil {
-				ec <- err
+			r, err := read(conn, times)
+			if err != nil {
+				ch <- err
 				return
 			}
-
-			rc <- r
+			ch <- r
 		}()
-		select {
-		case err = <-ec:
-			return nil, err
-		case r := <-rc:
-			return r, nil
+		switch v := (<-ch).(type) {
+		case *Result:
+			return v, nil
+		case error:
+			return nil, v
+		default:
+			return &Result{}, nil // this never happens but compiler is only happy with it included
 		}
 	}
 }
