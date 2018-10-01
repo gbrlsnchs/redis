@@ -2,20 +2,23 @@ package redis
 
 import (
 	"context"
+	"log"
+	"net"
 
+	"github.com/gbrlsnchs/cpool"
 	"github.com/gbrlsnchs/redis/internal"
 )
 
 type DB struct {
-	pool *internal.Pool
+	p *cpool.Pool
 }
 
-func Open(addr string) (*DB, error) {
-	p, err := internal.NewPool(addr)
+func Open(address string) (*DB, error) {
+	tcpAddr, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {
 		return nil, err
 	}
-	return &DB{pool: p}, nil
+	return &DB{p: cpool.New("tcp", tcpAddr.String())}, nil
 }
 
 func (db *DB) Multi() (*Tx, error) {
@@ -23,7 +26,7 @@ func (db *DB) Multi() (*Tx, error) {
 }
 
 func (db *DB) MultiTx(ctx context.Context) (*Tx, error) {
-	conn, err := db.pool.Get(ctx)
+	conn, err := db.p.GetContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +51,7 @@ func (db *DB) Send(cmd string, args ...interface{}) (*Result, error) {
 }
 
 func (db *DB) SendContext(ctx context.Context, cmd string, args ...interface{}) (*Result, error) {
-	conn, err := db.pool.Get(ctx)
+	conn, err := db.p.GetContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -58,9 +61,9 @@ func (db *DB) SendContext(ctx context.Context, cmd string, args ...interface{}) 
 }
 
 func (db *DB) SetMaxIdleConns(maxConns int) {
-	db.pool.SetMaxIdleConns(maxConns)
+	db.p.SetMaxIdleConns(maxConns)
 }
 
 func (db *DB) SetMaxOpenConns(maxConns int) {
-	db.pool.SetMaxOpenConns(maxConns)
+	db.p.SetMaxOpenConns(maxConns)
 }
