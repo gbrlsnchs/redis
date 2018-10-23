@@ -1,2 +1,4 @@
 github.com/gbrlsnchs/connpool v0.0.0-20181018203723-ece920d05c97 h1:k9b7ByT0dLR3xmH3aznVbJEDfxjDPYE9Z9e++9XaG8A=
 github.com/gbrlsnchs/connpool v0.0.0-20181018203723-ece920d05c97/go.mod h1:cb9vSsQPO6fxJfr95loyKNtL0nOUzxIjMYvl2byiYzA=
+github.com/gbrlsnchs/connpool v0.1.0 h1:ybcopk9ihX4DZcQ7FcvAFwDmuSireMDrNQaT6ErnzTY=
+github.com/gbrlsnchs/connpool v0.1.0/go.mod h1:cb9vSsQPO6fxJfr95loyKNtL0nOUzxIjMYvl2byiYzA=
