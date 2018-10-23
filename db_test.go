@@ -15,7 +15,7 @@ var db *DB
 
 func TestMain(m *testing.M) {
 	var err error
-	db, err = Open("localhost:6379")
+	db, err = Open(":6379")
 	db.SetMaxOpenConns(1)
 	if err != nil {
 		log.Fatal(err)
