@@ -43,7 +43,7 @@ db, err := redis.Open(":6379")
 if err != nil {
 	// handle error
 }
-db.SetMaxIdleConns(20)  // reuses up to 20 connections without closing them
+db.SetMaxIdleConns(20) // reuses up to 20 connections without closing them
 db.SetMaxOpenConns(45) // opens up to 45 connections (20 remain open), otherwise waits
 ```
 
