@@ -44,7 +44,7 @@ if err != nil {
 	// handle error
 }
 db.SetMaxIdleConns(20)  // reuses up to 20 connections without closing them
-db.SetMaxOpensConns(45) // opens up to 45 connections (20 remain open), otherwise waits
+db.SetMaxOpenConns(45) // opens up to 45 connections (20 remain open), otherwise waits
 ```
 
 ### Sending commands
