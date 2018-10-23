@@ -1,4 +1,2 @@
-github.com/gbrlsnchs/cpool v0.0.0-20181001044654-d8ba331ade98 h1:VWfUkCQY9ppxvX5k7/PMptvU2/9bdefgh39dml32+pU=
-github.com/gbrlsnchs/cpool v0.0.0-20181001044654-d8ba331ade98/go.mod h1:Agr4PmlDK3j41rL1aHJ6ZUdhjG3kzF1KPbQswjIhxAc=
-github.com/gbrlsnchs/cpool v0.0.0-20181001045255-ee90db49691d h1:6CSYUZrKaBzrYK7XsU6JkkE5yFAF+unLc/9Ku0FZ9fI=
-github.com/gbrlsnchs/cpool v0.0.0-20181001045255-ee90db49691d/go.mod h1:Agr4PmlDK3j41rL1aHJ6ZUdhjG3kzF1KPbQswjIhxAc=
+github.com/gbrlsnchs/connpool v0.0.0-20181018203723-ece920d05c97 h1:k9b7ByT0dLR3xmH3aznVbJEDfxjDPYE9Z9e++9XaG8A=
+github.com/gbrlsnchs/connpool v0.0.0-20181018203723-ece920d05c97/go.mod h1:cb9vSsQPO6fxJfr95loyKNtL0nOUzxIjMYvl2byiYzA=

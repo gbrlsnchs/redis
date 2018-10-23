@@ -4,12 +4,12 @@ import (
 	"context"
 	"net"
 
-	"github.com/gbrlsnchs/cpool"
+	"github.com/gbrlsnchs/connpool"
 	"github.com/gbrlsnchs/redis/internal"
 )
 
 type DB struct {
-	p *cpool.Pool
+	p *connpool.Pool
 }
 
 func Open(address string) (*DB, error) {
@@ -17,7 +17,7 @@ func Open(address string) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &DB{p: cpool.New("tcp", tcpAddr.String())}, nil
+	return &DB{p: connpool.New("tcp", tcpAddr.String())}, nil
 }
 
 func (db *DB) Multi() (*Tx, error) {
