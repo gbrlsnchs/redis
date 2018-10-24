@@ -1,9 +1,8 @@
 # redis (Redis client for Go)
 [![Build Status](https://travis-ci.org/gbrlsnchs/redis.svg?branch=master)](https://travis-ci.org/gbrlsnchs/redis)
-[![GoDoc](https://godoc.org/github.com/gbrlsnchs/redis?status.svg)](https://godoc.org/github.com/gbrlsnchs/redis)
 [![Sourcegraph](https://sourcegraph.com/github.com/gbrlsnchs/redis/-/badge.svg)](https://sourcegraph.com/github.com/gbrlsnchs/redis?badge)
 [![GoDoc](https://godoc.org/github.com/gbrlsnchs/redis?status.svg)](https://godoc.org/github.com/gbrlsnchs/redis)
-[![Minimal version](https://img.shields.io/badge/minimal%20version-go1.10%2B-5272b4.svg)](https://golang.org/doc/go1.10)
+[![Minimal Version](https://img.shields.io/badge/minimal%20version-go1.10%2B-5272b4.svg)](https://golang.org/doc/go1.10)
 
 ## About
 This package is a simple [Redis](https://redis.io) client for [Go](https://golang.org). It is context-aware and uses a resizable connection pool internally.
