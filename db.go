@@ -5,7 +5,6 @@ import (
 	"net"
 
 	"github.com/gbrlsnchs/connpool"
-	"github.com/gbrlsnchs/redis/internal"
 )
 
 type DB struct {
