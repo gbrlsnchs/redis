@@ -55,8 +55,8 @@ func (db *DB) SendContext(ctx context.Context, cmd string, args ...interface{}) 
 		return nil, err
 	}
 	defer conn.Close()
-	w := internal.NewWriter(conn)
-	return send(ctx, w, conn, 1, cmd, args...)
+	w := newWriter(conn, 1)
+	return w.send(ctx, cmd, args...)
 }
 
 func (db *DB) SetMaxIdleConns(maxConns int) {

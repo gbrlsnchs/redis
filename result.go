@@ -1,7 +1,6 @@
 package redis
 
 import (
-	"net"
 	"time"
 
 	"github.com/gbrlsnchs/redis/internal"
@@ -14,15 +13,6 @@ type Result struct {
 	null   bool     // null according to RESP
 	values [][]byte // raw RESP value
 	length int      // cache values len
-}
-
-func read(conn net.Conn, times int) (*Result, error) {
-	rr := internal.NewReader(conn)
-	values, err := rr.ReadN(times)
-	if err != nil {
-		return nil, err
-	}
-	return &Result{values: values, length: len(values)}, nil
 }
 
 func (r *Result) Bool() bool {
