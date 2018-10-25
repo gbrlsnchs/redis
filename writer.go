@@ -31,8 +31,6 @@ func (w *writer) read() (*Result, error) {
 }
 
 func (w *writer) send(ctx context.Context, cmd string, args ...interface{}) (*Result, error) {
-	ch := make(chan interface{})
-
 	// Check if context is done, otherwise wait for the whole connection to be read.
 	select {
 	case <-ctx.Done():
