@@ -2,6 +2,7 @@ package redis
 
 import (
 	"context"
+	"errors"
 	"net"
 
 	"github.com/gbrlsnchs/connpool"
@@ -64,4 +65,45 @@ func (db *DB) SetMaxIdleConns(maxConns int) {
 
 func (db *DB) SetMaxOpenConns(maxConns int) {
 	db.p.SetMaxOpenConns(maxConns)
+}
+
+func (db *DB) Subscribe(channels ...interface{}) (*Subscription, error) {
+	return db.SubscribeContext(context.Background(), channels...)
+}
+
+func (db *DB) SubscribeContext(ctx context.Context, channels ...interface{}) (*Subscription, error) {
+	if len(channels) == 0 {
+		return nil, errors.New("redis: no channels to subscribe")
+	}
+	// Since subscriptions are meant to be long-running connections,
+	// getting a connection from the pool seems unnecessary as it might
+	// end up stealing ready-to-go connections from accesses meant to be quick.
+	// When a connection spawned by DialContext is closed, the pool tries to store
+	// it back in its inner connection pool, so this is not a simple connection at all.
+	conn, err := db.p.DialContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	length := len(channels)
+	w := newWriter(conn, length)
+	r, err := w.send(ctx, "SUBSCRIBE", channels...)
+	if err != nil {
+		return nil, err
+	}
+
+	sub := newSubscription(ctx, length)
+	for i := 0; i < len(r.values); i += 3 {
+		channel := Value(r.values[i+1]).String()
+		sub.channels[channel] = make(chan Value)
+	}
+	go func() {
+		rr := internal.NewReader(conn)
+		for {
+			values, _ := rr.ReadFull()
+			channel := Value(values[1])
+			message := Value(values[2])
+			sub.channels[channel.String()] <- message
+		}
+	}()
+	return sub, nil
 }
